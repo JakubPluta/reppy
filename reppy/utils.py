@@ -1,10 +1,13 @@
 import csv
+import glob
 import itertools
-from typing import Any, Optional, Iterable, Iterator, List
-from pathlib import Path
 import os
+import pathlib
+from pathlib import Path
+from typing import Any, AnyStr, Generator, Iterable, Iterator, List, Optional
 
 import ijson
+
 from reppy.data_types import FilePath
 from reppy.ext import NotSupportedFileFormat
 from reppy.log import get_logger
@@ -119,7 +122,55 @@ def read_json(file_path: FilePath, chunk_size: int = 1000):
 
 
 def read_csv(file_path: FilePath, chunk_size: int = 1000):
-    with open(file_path, 'r') as csv_file:
+    with open(file_path, "r") as csv_file:
         reader = csv.reader(csv_file)
         for chunk in chunk_generator(reader, chunk_size):
             yield chunk
+
+
+def get_delimiter(line: AnyStr):
+    sniffer = csv.Sniffer()
+    delimiter = sniffer.sniff(line).delimiter
+    return delimiter
+
+
+def _check_number_of_columns(file_path):
+    with open(file_path, "r") as f:
+        line = f.readline()
+    return len(line.split(","))
+
+
+def get_paths(
+    dir_path: str,
+    ext: Optional[str] = None,
+    recursive: bool = True,
+    pattern: Optional[str] = None,
+) -> List[Path]:
+    """
+    Get all paths matching the specified pattern in the specified directory.
+
+    Parameters
+    ----------
+    dir_path: str
+        The directory path.
+    ext: Optional[str]
+        The file extension to filter by.
+    recursive: bool
+        Whether to search recursively.
+    pattern: Optional[str]
+        The glob pattern to match.
+
+    Returns
+    -------
+    List[Path]
+        A list of paths matching the specified pattern.
+    """
+    pattern = "*" if pattern is None else pattern
+    paths: Generator[pathlib.Path] = (
+        Path(dir_path).rglob(pattern) if recursive else Path(dir_path).glob(pattern)
+    )
+    f: Path
+    files = [f.resolve() for f in filter(os.path.isfile, paths)]
+    return (
+        list(files) if ext is None else [file for file in files if ext in file.suffix]
+    )
