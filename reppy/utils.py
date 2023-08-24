@@ -22,6 +22,13 @@ SUPPORTED_FILE_SUFFIXES = (
 )
 
 
+def remove_last_character(file_path: FilePath):
+    """open file and remove last character"""
+    with open(file_path, "rb+") as file:
+        file.seek(-1, 2)
+        file.truncate()
+
+
 def chunk_generator(iterable: Iterable, batch_size: int = 1000) -> Iterator[List[Any]]:
     """Yield chunks of an iterable.
 
@@ -51,7 +58,7 @@ def chunk_generator(iterable: Iterable, batch_size: int = 1000) -> Iterator[List
         yield list(itertools.chain((first_el,), chunk_it))
 
 
-def get_file_suffix(path: str, dot: bool = True):
+def get_file_suffix(path: str, dot: bool = True) -> str:
     return Path(path).suffix if dot else Path(path).suffix[1:]
 
 
@@ -95,33 +102,20 @@ def is_dir(path: str):
     return Path(path).is_dir()
 
 
-def write_file(path: str, data: Any) -> None:
-    with open(path, "w") as f:
-        f.write(data)
-
-
-def list_files(path: str, extension: str = None) -> Optional[list]:
-    files = (file for file in os.scandir(path) if get_file_suffix(file.name) != "")
-    return (
-        list(files)
-        if extension is None
-        else [file for file in files if extension in file.name]
-    )
-
-
 def read_json(file_path: FilePath, chunk_size: int = 1000):
     """read json file in chunks in lazy way"""
 
     def _read_json():
         with open(file_path, "rb") as f:
             for record in ijson.items(f, "item"):
-                del record["_id"]
+                if '_id' in record:
+                    del record["_id"]
                 yield record
 
     yield from chunk_generator(_read_json(), chunk_size)
 
 
-def read_csv(file_path: FilePath, chunk_size: int = 1000):
+def read_csv(file_path: FilePath, chunk_size: int = 5000):
     with open(file_path, "r") as csv_file:
         reader = csv.reader(csv_file)
         for chunk in chunk_generator(reader, chunk_size):
@@ -140,10 +134,10 @@ def _check_number_of_columns(file_path):
     return len(line.split(","))
 
 
-def get_paths(
+def list_files(
     dir_path: str,
     ext: Optional[str] = None,
-    recursive: bool = True,
+    recursive: bool = False,
     pattern: Optional[str] = None,
 ) -> List[Path]:
     """
