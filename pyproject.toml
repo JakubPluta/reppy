@@ -11,6 +11,7 @@ python = "^3.10"
 pandas = "^2.0.3"
 click = "^8.1.7"
 ijson = "^3.2.3"
+pyarrow = "^13.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
