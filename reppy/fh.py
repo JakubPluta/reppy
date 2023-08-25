@@ -14,6 +14,7 @@ SUPPORTED_FILE_SUFFIXES = (
     "csv",
     "json",
     "parquet",
+    "text",
     # "xlsx", # NOT SUPPORTED
 )
 
