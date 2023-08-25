@@ -1,27 +1,27 @@
-import os.path
 import csv
 import os
+import os.path
 import pathlib
 from pathlib import Path
-from typing import AnyStr, Generator, List, Optional, Union, Dict
+from typing import Any, AnyStr, Dict, Generator, List, Optional, Union
 
-from reppy.data_types import FilePath
+from reppy.data_types import PathLike
+from reppy.decorators import valid_file_path
 from reppy.ext import NotSupportedFileFormat
 from reppy.log import get_logger
-
 
 SUPPORTED_FILE_SUFFIXES = (
     "csv",
     "json",
     "parquet",
-    "text",
+    "txt",
     # "xlsx", # NOT SUPPORTED
 )
 
 logger = get_logger(__name__)
 
 
-def get_file_suffix(path: str, dot: bool = True) -> str:
+def get_file_suffix(path: PathLike, dot: bool = True) -> str:
     """
     Get the file suffix.
 
@@ -81,7 +81,7 @@ def check_extension(suffix: str) -> Optional[str]:
         )
 
 
-def file_exists(path: str) -> bool:
+def file_exists(path: PathLike) -> bool:
     """
     Checks if a file exists.
 
@@ -106,7 +106,7 @@ def file_exists(path: str) -> bool:
     return Path(path).exists()
 
 
-def get_delimiter(line: AnyStr) -> Optional[str]:
+def get_delimiter(line: AnyStr) -> Optional[Any]:
     """
     Get the delimiter from a line of text.
 
@@ -117,7 +117,7 @@ def get_delimiter(line: AnyStr) -> Optional[str]:
 
     Returns
     -------
-    Optional[str]
+    Optional[Any]
         The delimiter, or `None` if it could not be determined.
 
     Raises
@@ -130,11 +130,10 @@ def get_delimiter(line: AnyStr) -> Optional[str]:
         raise ValueError("line must be a string or bytes")
 
     sniffer = csv.Sniffer()
-    delimiter = sniffer.sniff(line).delimiter
-    return delimiter
+    return sniffer.sniff(line).delimiter
 
 
-def _check_number_of_columns(file_path: str) -> int:
+def _check_number_of_columns_in_csv_file(file_path: PathLike) -> int:
     """
     Checks the number of columns in a CSV file.
 
@@ -159,7 +158,9 @@ def _check_number_of_columns(file_path: str) -> int:
     return len(line.split(","))
 
 
-def _check_all_files(file_paths: List[str]) -> Dict[FilePath, int]:
+def _check_number_of_columns_in_all_csv_files(
+    file_paths: List[PathLike],
+) -> Dict[PathLike, int]:
     """
     Checks the number of columns in all CSV files in a list.
 
@@ -180,10 +181,30 @@ def _check_all_files(file_paths: List[str]) -> Dict[FilePath, int]:
     """
 
     return {
-        file: _check_number_of_columns(file)
+        file: _check_number_of_columns_in_csv_file(file)
         for file in file_paths
         if Path(file).is_file()
     }
+
+
+def _check_all_files_have_same_columns(file_paths: List[PathLike]) -> bool:
+    """
+    Checks if all the CSV files have the same number of columns.
+
+    Parameters
+    ----------
+    file_paths: List[PathLike]
+        A list of paths to the CSV files.
+
+    Returns
+    -------
+    bool
+        `True` if all the files have the same number of columns, `False` otherwise.
+    """
+
+    files: Dict[PathLike, int] = _check_number_of_columns_in_all_csv_files(file_paths)
+    shapes = list(files.values())
+    return all([x == shapes[0] for x in shapes])
 
 
 def list_files(
@@ -220,3 +241,20 @@ def list_files(
     return (
         list(files) if ext is None else [file for file in files if ext in file.suffix]
     )
+
+
+@valid_file_path
+def _file_partitionable(file_path: PathLike, column: Union[List[AnyStr], AnyStr]):
+    with open(file_path, "r") as f:
+        line = f.readline()
+    if isinstance(column, list):
+        return all([_partitionable(line, c) for c in column])
+    return _partitionable(line, column)
+
+
+def _partitionable(line: AnyStr, column: AnyStr):
+    sep = get_delimiter(line)
+    return column in line.split(sep or ",")
+
+
+print(_file_partitionable(r"..\data\1.csv", ["column_1", "column_5"]))

@@ -2,15 +2,14 @@ import csv
 import json
 from pathlib import Path
 from typing import Optional
+
 import pyarrow.parquet as pq
+
+from reppy.data_types import PathLike
+from reppy.fh import list_files
 from reppy.log import get_logger
-from reppy.utils import (
-    list_files,
-    read_csv,
-    read_json,
-    remove_last_character,
-    read_parquet,
-)
+from reppy.readers import read_csv, read_json, read_parquet, read_text
+from reppy.utils import remove_last_character
 
 logger = get_logger(__name__)
 
@@ -24,7 +23,7 @@ class Combiner:
         pass
 
 
-def _combine_csv(input_dir: str, output_path: str, **kwargs):
+def _combine_csv(input_dir: PathLike, output_path: PathLike, **kwargs):
     if not Path(input_dir).is_dir():
         raise Exception("is not directory")
 
@@ -45,7 +44,7 @@ def _combine_csv(input_dir: str, output_path: str, **kwargs):
     logger.debug(f"writing done {rows} rows")
 
 
-def _combine_json(input_dir: str, output_path: str, **kwargs):
+def _combine_json(input_dir: PathLike, output_path: PathLike, **kwargs):
     if not Path(input_dir).is_dir():
         raise Exception("is not directory")
     logger.debug(f"writing data to {output_path}")
@@ -69,7 +68,7 @@ def _combine_json(input_dir: str, output_path: str, **kwargs):
     logger.debug(f"writing done {rows} rows")
 
 
-def _combine_parquet(input_dir: str, output_path: str, **kwargs):
+def _combine_parquet(input_dir: PathLike, output_path: PathLike, **kwargs):
     if not Path(input_dir).is_dir():
         raise Exception("is not directory")
     logger.debug(f"writing data to {output_path}")

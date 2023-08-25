@@ -1,19 +1,21 @@
 import csv
-from typing import Generator, Dict, Any, List
-from pyarrow import RecordBatch
-from reppy.utils import chunk_generator, valid_file_path
-import pyarrow.parquet as pq
-import ijson
+from typing import Any, Dict, Generator, List
 
-from reppy.data_types import FilePath
+import ijson
+import pyarrow.parquet as pq
+from pyarrow import RecordBatch
+
+from reppy.data_types import PathLike
+from reppy.decorators import valid_file_path
 from reppy.log import get_logger
+from reppy.utils import chunk_generator
 
 logger = get_logger(__name__)
 
 
 @valid_file_path
 def read_json(
-    file_path: FilePath, chunk_size: int = 1000, **kwargs
+    file_path: PathLike, chunk_size: int = 1000, **kwargs
 ) -> Generator[List[Dict[str, Any]], None, None]:
     """
     Read JSON file in chunks in lazy way.
@@ -48,7 +50,7 @@ def read_json(
 
 @valid_file_path
 def read_csv(
-    file_path: FilePath, chunk_size: int = 5000, **kwargs
+    file_path: PathLike, chunk_size: int = 5000, **kwargs
 ) -> Generator[List[Any], None, None]:
     """
     Read CSV file in chunks in lazy way.
@@ -76,7 +78,7 @@ def read_csv(
 
 @valid_file_path
 def read_parquet(
-    file_path: FilePath, chunk_size: int = 5000
+    file_path: PathLike, chunk_size: int = 5000
 ) -> Generator[RecordBatch, None, None]:
     """
     Read Parquet file in chunks in lazy way.
@@ -101,7 +103,7 @@ def read_parquet(
 
 @valid_file_path
 def read_text(
-    file_path: FilePath, chunk_size: int = 5000, **kwargs
+    file_path: PathLike, chunk_size: int = 5000, **kwargs
 ) -> Generator[List[Any], None, None]:
     """
     Read text file in chunks in lazy way.
