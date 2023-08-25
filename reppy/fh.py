@@ -257,4 +257,18 @@ def _partitionable(line: AnyStr, column: AnyStr):
     return column in line.split(sep or ",")
 
 
-print(_file_partitionable(r"..\data\1.csv", ["column_1", "column_5"]))
+def validate_file_path(file_path):
+    if not isinstance(file_path, PathLike):
+        raise TypeError("path must be a string or PathLike object")
+    file_path = Path(file_path)
+    if file_path.exists() is False:
+        raise FileNotFoundError(f"file {file_path} not exists")
+    return file_path
+
+
+def mkdir_if_not_exists(file_path: PathLike):
+    if not isinstance(file_path, PathLike):
+        file_path = Path(file_path)
+    directory = file_path.parent
+    if directory.exists() is False:
+        directory.mkdir(parents=True, exist_ok=True)
