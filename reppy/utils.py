@@ -45,7 +45,7 @@ def chunk_generator(iterable: Iterable, batch_size: int = 1000) -> Iterator[List
         yield list(itertools.chain((first_el,), chunk_it))
 
 
-def add_missing_extension(file_path: PathLike, file_extension: str) -> PathLike:
+def add_missing_suffix(file_path: PathLike, file_extension: str) -> PathLike:
     """
     Add file extension to file path.
 
@@ -69,3 +69,7 @@ def add_missing_extension(file_path: PathLike, file_extension: str) -> PathLike:
         if file_path.endswith(".")
         else f"{file_path}.{file_extension}"
     )
+
+
+def _skip_header(file_index: int, chunk_idx: int) -> bool:
+    return file_index > 0 and chunk_idx == 0

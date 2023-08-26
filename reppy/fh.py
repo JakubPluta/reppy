@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, AnyStr, Dict, Generator, List, Optional, Union
 
 from reppy.data_types import PathLike
-from reppy.decorators import valid_file_path
 from reppy.ext import NotSupportedFileFormat
 from reppy.log import get_logger
 
@@ -243,12 +242,9 @@ def list_files(
     )
 
 
-@valid_file_path
-def _file_partitionable(file_path: PathLike, column: Union[List[AnyStr], AnyStr]):
+def _file_partitionable(file_path: PathLike, column: AnyStr):
     with open(file_path, "r") as f:
         line = f.readline()
-    if isinstance(column, list):
-        return all([_partitionable(line, c) for c in column])
     return _partitionable(line, column)
 
 
@@ -267,8 +263,7 @@ def validate_file_path(file_path):
 
 
 def mkdir_if_not_exists(file_path: PathLike):
-    if not isinstance(file_path, PathLike):
-        file_path = Path(file_path)
+    file_path = Path(file_path)
     directory = file_path.parent
     if directory.exists() is False:
         directory.mkdir(parents=True, exist_ok=True)
