@@ -254,7 +254,7 @@ def _partitionable(line: AnyStr, column: AnyStr):
 
 
 def validate_file_path(file_path):
-    if not isinstance(file_path, PathLike):
+    if not isinstance(file_path, (str, PathLike)):
         raise TypeError("path must be a string or PathLike object")
     file_path = Path(file_path)
     if file_path.exists() is False:

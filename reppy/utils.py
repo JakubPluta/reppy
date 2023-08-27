@@ -1,5 +1,9 @@
+import csv
+import dataclasses
+import io
 import itertools
-from typing import Any, Iterable, Iterator, List
+from pathlib import Path
+from typing import Any, Iterable, Iterator, List, AnyStr, Union
 
 from reppy.data_types import PathLike
 from reppy.decorators import valid_file_path
@@ -73,3 +77,8 @@ def add_missing_suffix(file_path: PathLike, file_extension: str) -> PathLike:
 
 def _skip_header(file_index: int, chunk_idx: int) -> bool:
     return file_index > 0 and chunk_idx == 0
+
+
+def add_no_prefix_to_file_path(file_path: PathLike, name_suffix: Union[AnyStr, int]):
+    p = Path(file_path)
+    return Path(p.parent, f"{p.stem}_{name_suffix}{p.suffix}").resolve()
