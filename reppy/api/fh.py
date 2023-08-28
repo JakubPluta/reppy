@@ -5,6 +5,7 @@ import pathlib
 from pathlib import Path
 from typing import Any, AnyStr, Dict, Generator, List, Optional, Union
 
+from reppy.api.decorators import valid_file_path
 from reppy.data_types import PathLike
 from reppy.ext import NotSupportedFileFormat
 from reppy.log import get_logger
@@ -267,3 +268,17 @@ def mkdir_if_not_exists(file_path: PathLike):
     directory = file_path.parent
     if directory.exists() is False:
         directory.mkdir(parents=True, exist_ok=True)
+
+
+@valid_file_path
+def remove_last_character(file_path: PathLike):
+    """open file and remove last character"""
+    with open(file_path, "rb+") as file:
+        file.seek(-1, 2)
+        file.truncate()
+
+
+@valid_file_path
+def write_closing_bracket(file_path: PathLike):
+    with open(file_path, "a") as file:
+        file.write("]")

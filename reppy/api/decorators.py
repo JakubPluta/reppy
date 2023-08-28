@@ -1,6 +1,6 @@
 import functools
 from typing import Callable
-from reppy.fh import validate_file_path, mkdir_if_not_exists
+from reppy.api.fh import validate_file_path, mkdir_if_not_exists
 
 
 def valid_file_path(func: Callable):

@@ -1,3 +1,4 @@
+import abc
 import csv
 import dataclasses
 import json
@@ -6,23 +7,23 @@ from typing import Optional, List, Any, AnyStr, Tuple, TextIO
 import pyarrow.parquet as pq
 
 from reppy.data_types import PathLike
-from reppy.decorators import mkdir_decorator
 from reppy.ext import InvalidFileFormat, NoFilesInDirectory
-from reppy.fh import (
+from reppy.api.fh import (
     list_files,
     validate_file_path,
     mkdir_if_not_exists,
     get_file_suffix,
+    remove_last_character,
+    write_closing_bracket,
 )
 from reppy.log import get_logger
-from reppy.readers import read_csv, read_json, read_parquet, read_text
+from reppy.api.readers import read_csv, read_json, read_parquet, read_text
 from reppy.utils import (
-    remove_last_character,
     add_missing_suffix,
     _skip_header,
     add_no_prefix_to_file_path,
-    write_closing_bracket,
 )
+
 
 logger = get_logger(__name__)
 
@@ -34,7 +35,9 @@ class MergeTracker:
     is_open: bool = False
 
 
-class CSVCombiner:
+class _Combiner:
+    file_extension: str
+
     def __init__(
         self,
         input_dir: PathLike,
@@ -50,14 +53,7 @@ class CSVCombiner:
         self.chunk_size = chunk_size
         self.max_file_records = max_file_records
 
-        self.output_path = add_missing_suffix(output_path, "csv")
-        self.ext = get_file_suffix(self.output_path, True)
-        if self.ext != ".csv":
-            raise InvalidFileFormat(
-                f"for output_path={self.output_path} file format is invalid {self.ext}, should be .csv "
-            )
-        mkdir_if_not_exists(self.output_path)
-
+        self._prepare_output_paths(output_path, self.file_extension)
         self._files_list = list_files(
             self.input_dir, self.ext, self.recursive, self.pattern
         )
@@ -65,6 +61,25 @@ class CSVCombiner:
             raise NoFilesInDirectory(
                 f"there are no files to read in directory {self.input_dir}"
             )
+
+    def _prepare_output_paths(self, output_path, file_extension):
+        output_path = add_missing_suffix(output_path, file_extension)
+        ext = get_file_suffix(output_path, True)
+        if file_extension not in ext:
+            raise InvalidFileFormat(
+                f"for output_path={output_path} file format is invalid {ext}, should be {self.file_extension} "
+            )
+        mkdir_if_not_exists(output_path)
+        self.output_path = output_path
+        self.ext = ext
+
+    @abc.abstractmethod
+    def merge(self):
+        raise NotImplementedError
+
+
+class CSVCombiner(_Combiner):
+    file_extension = ".csv"
 
     @staticmethod
     def _prep_chunk(
@@ -222,37 +237,8 @@ class CSVCombiner:
             self._cleanup(csv_file)
 
 
-class JSONCombiner:
-    def __init__(
-        self,
-        input_dir: PathLike,
-        output_path: PathLike,
-        pattern: Optional[str] = None,
-        recursive: bool = False,
-        chunk_size: int = 10_000,
-        max_file_records: Optional[int] = None,
-    ):
-        self.input_dir = validate_file_path(input_dir)
-        self.pattern = pattern
-        self.recursive = recursive
-        self.chunk_size = chunk_size
-        self.max_file_records = max_file_records
-
-        self.output_path = add_missing_suffix(output_path, "json")
-        self.ext = get_file_suffix(self.output_path, True)
-        if self.ext != ".json":
-            raise InvalidFileFormat(
-                f"for output_path={self.output_path} file format is invalid {self.ext}, should be .json "
-            )
-        mkdir_if_not_exists(self.output_path)
-
-        self._files_list = list_files(
-            self.input_dir, self.ext, self.recursive, self.pattern
-        )
-        if not self._files_list:
-            raise NoFilesInDirectory(
-                f"there are no files to read in directory {self.input_dir}"
-            )
+class JSONCombiner(_Combiner):
+    file_extension = ".json"
 
     def _write_file(self, file: TextIO, file_path: PathLike) -> int:
         rows = 0
@@ -278,28 +264,57 @@ class JSONCombiner:
         logger.debug(f"writing done {rows} rows")
 
 
-@mkdir_decorator
-def _combine_parquet(input_dir: PathLike, output_path: PathLike, **kwargs):
-    logger.debug(f"writing data to {output_path}")
-    rows = 0
-    output_path += ".parquet" if "parquet" not in output_path else ""
+class ParquetCombiner(_Combiner):
+    file_extension = ".parquet"
 
-    writer: Optional[pq.ParquetWriter] = None  # create variable for writer
-
-    try:
-        for f_idx, file in enumerate(list_files(input_dir, "parquet")):
-            logger.debug(f"{f_idx} {file} opened")
-            for chunk_idx, chunk in enumerate(read_parquet(file)):
-                logger.debug(f"writing file {file} chunk: {chunk_idx} to {output_path}")
-                if writer is None:
-                    writer = pq.ParquetWriter(
-                        output_path, chunk.schema
-                    )  # schema is available when first chunk read
-                writer.write_batch(chunk)
-                rows += len(chunk)
-    except Exception as e:  # TODO: Improve this try/except block to be more implicit
-        logger.error(str(e))
-    finally:
+    @staticmethod
+    def _cleanup(writer: pq.ParquetWriter):
         if writer:
             writer.close()
-    logger.debug(f"writing done {rows} rows")
+
+    def merge(self):
+        logger.debug(f"writing data to {self.output_path}")
+        rows = 0
+        writer: Optional[pq.ParquetWriter] = None  # create variable for writer
+
+        try:
+            for file_idx, file_path in enumerate(self._files_list):
+                logger.debug(f"{file_idx} {file_path} opened")
+                for chunk_idx, chunk in enumerate(read_parquet(file_path)):
+                    logger.debug(
+                        f"writing file {file_idx} chunk: {chunk_idx} to {self.output_path}"
+                    )
+                    if writer is None:
+                        writer = pq.ParquetWriter(
+                            self.output_path, chunk.schema
+                        )  # schema is available when first chunk read
+                    writer.write_batch(chunk)
+                    rows += len(chunk)
+        except Exception as e:
+            logger.error(str(e))
+        finally:
+            if writer:
+                writer.close()
+        logger.debug(f"writing done {rows} rows")
+
+
+class TextCombiner(_Combiner):
+    file_extension = ".txt"
+
+    def _write_file(self, file: TextIO, file_path: PathLike):
+        rows = 0
+        for chunk_idx, chunk in enumerate(read_text(file_path)):
+            file.writelines(chunk)
+            rows += len(chunk)
+            logger.debug(
+                f"writing file {file_path} chunk: {chunk_idx} to {self.output_path}"
+            )
+        return rows
+
+    def merge(self):
+        logger.debug(f"writing data to {self.output_path}")
+        rows = 0
+        with open(self.output_path, "w") as file:
+            for file_idx, file_path in enumerate(self._files_list):
+                rows += self._write_file(file, file_path)
+        logger.debug(f"writing done {rows} rows")
