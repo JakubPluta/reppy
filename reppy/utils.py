@@ -20,6 +20,12 @@ def remove_last_character(file_path: PathLike):
         file.truncate()
 
 
+@valid_file_path
+def write_closing_bracket(file_path: PathLike):
+    with open(file_path, "a") as file:
+        file.write("]")
+
+
 def chunk_generator(iterable: Iterable, batch_size: int = 1000) -> Iterator[List[Any]]:
     """Yield chunks of an iterable.
 
