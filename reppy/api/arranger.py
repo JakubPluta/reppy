@@ -29,13 +29,34 @@ logger = get_logger(__name__)
 
 
 @dataclasses.dataclass(repr=True)
-class MergeTracker:
+class MergeState:
     rows: int = 0
     prefix: int = 0
     is_open: bool = False
 
 
 class _Combiner:
+    """Base class for combiners.
+
+    Parameters
+    ----------
+    input_dir (PathLike): The input directory for the data.
+    output_path (PathLike): The output path for the data.
+    pattern: Optional[str] = None,
+         The file pattern to match.
+    recursive: bool = False,
+         Whether to search recursively.
+    chunk_size: int = 10_000,
+         The chunk size for reading the files.
+    max_file_records: Optional[int] = None,
+         The maximum number of records to write to each file.
+
+    Raises
+    ------
+    NoFilesInDirectory: If there are no files to read in the input directory.
+
+    """
+
     file_extension: str
 
     def __init__(
@@ -51,7 +72,7 @@ class _Combiner:
         self.pattern = pattern
         self.recursive = recursive
         self.chunk_size = chunk_size
-        self.max_file_records = max_file_records
+        self.max_file_records = min(max_file_records, 1) if max_file_records else None
 
         self._prepare_output_paths(output_path, self.file_extension)
         self._files_list = list_files(
@@ -62,13 +83,36 @@ class _Combiner:
                 f"there are no files to read in directory {self.input_dir}"
             )
 
-    def _prepare_output_paths(self, output_path, file_extension):
+    def _prepare_output_paths(self, output_path: PathLike, file_extension: str) -> None:
+        """Prepare the output paths for the data.
+
+        Parameters
+        ----------
+        output_path (PathLike): The output path for the data.
+        file_extension (str): The file extension for the data.
+
+        Returns
+        -------
+        None.
+
+        Raises
+        ------
+        InvalidFileFormat: If the file format is invalid.
+
+        """
+
+        # Add the missing file extension to the output path.
         output_path = add_missing_suffix(output_path, file_extension)
+        # Get the file extension from the output path
         ext = get_file_suffix(output_path, True)
+
+        # Check if the file extension is valid.
         if file_extension not in ext:
             raise InvalidFileFormat(
                 f"for output_path={output_path} file format is invalid {ext}, should be {self.file_extension} "
             )
+
+        # Create the output directory if it does not exist.
         mkdir_if_not_exists(output_path)
         self.output_path = output_path
         self.ext = ext
@@ -181,7 +225,7 @@ class CSVCombiner(_Combiner):
         logger.debug(f"from {file_path}: rows {rows} written")
         return rows
 
-    def merge(self) -> None:
+    def merge_one(self) -> None:
         """
         Merges multiple CSV files into a single CSV file.
 
@@ -201,8 +245,8 @@ class CSVCombiner(_Combiner):
         )
 
     def merge_many(self):
-        t = MergeTracker()
         csv_file, output_path, header, writer = None, None, None, None
+        ms = MergeState()
         try:
             for file_index, file_path in enumerate(self._files_list):
                 for chunk_idx, chunk in enumerate(read_csv(file_path, self.chunk_size)):
@@ -212,29 +256,32 @@ class CSVCombiner(_Combiner):
                         csv_file is None
                     ):  # if file is closed, open new file and get writer
                         output_path = add_no_prefix_to_file_path(
-                            self.output_path, t.prefix
+                            self.output_path, ms.prefix
                         )
                         csv_file, writer = self._open_new_file(output_path)
-                        t.is_open = True
+                        ms.is_open = True
 
                     logger.debug(
                         f"writing file {file_path} chunk: {chunk_idx} to {output_path}"
                     )
-                    chunk = self._prep_chunk(t.is_open, chunk_idx, chunk, header)
+                    chunk = self._prep_chunk(ms.is_open, chunk_idx, chunk, header)
 
                     writer.writerows(chunk)
-                    t.rows += len(chunk)
+                    ms.rows += len(chunk)
 
-                    if t.rows >= self.max_file_records:
+                    if ms.rows >= self.max_file_records:
                         csv_file, writer = self._cleanup(csv_file)
-                        t.prefix += 1
-                        t.rows = 0
+                        ms.prefix += 1
+                        ms.rows = 0
 
-                    t.is_open = False
+                    ms.is_open = False
 
         except Exception as e:
             logger.error(e)
             self._cleanup(csv_file)
+
+    def merge(self):
+        self.merge_many() if self.max_file_records else self.merge_one()
 
 
 class JSONCombiner(_Combiner):
