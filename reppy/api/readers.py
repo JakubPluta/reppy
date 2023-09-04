@@ -5,8 +5,8 @@ import ijson
 import pyarrow.parquet as pq
 from pyarrow import RecordBatch
 
+from reppy.api.decorators import valid_file_path
 from reppy.data_types import PathLike
-from reppy.decorators import valid_file_path
 from reppy.log import get_logger
 from reppy.utils import chunk_generator
 

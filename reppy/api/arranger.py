@@ -1,38 +1,27 @@
 import abc
 import csv
-import dataclasses
 import json
-from typing import Optional, List, Any, AnyStr, Tuple, TextIO
+from typing import Any, List, Optional, TextIO, Tuple
 
 import pyarrow.parquet as pq
 
-from reppy.data_types import PathLike
-from reppy.ext import InvalidFileFormat, NoFilesInDirectory
-from reppy.api.fh import (
-    list_files,
-    validate_file_path,
-    mkdir_if_not_exists,
+from reppy.api.file_handlers import (
+    add_missing_suffix,
+    add_number_prefix_to_file_path,
     get_file_suffix,
+    list_files,
+    mkdir_if_not_exists,
     remove_last_character,
+    validate_file_path,
     write_closing_bracket,
 )
-from reppy.log import get_logger
 from reppy.api.readers import read_csv, read_json, read_parquet, read_text
-from reppy.utils import (
-    add_missing_suffix,
-    _skip_header,
-    add_no_prefix_to_file_path,
-)
-
+from reppy.data_types import PathLike, MergeState
+from reppy.ext import InvalidFileFormat, NoFilesInDirectory
+from reppy.log import get_logger
+from reppy.utils import _skip_header
 
 logger = get_logger(__name__)
-
-
-@dataclasses.dataclass(repr=True)
-class MergeState:
-    rows: int = 0
-    prefix: int = 0
-    is_open: bool = False
 
 
 class _Combiner:
@@ -218,14 +207,14 @@ class CSVCombiner(_Combiner):
 
         rows = 0
         for chunk_idx, chunk in enumerate(read_csv(file_path, self.chunk_size)):
-            logger.debug(f"Writing file {file_path} chunk: {chunk_idx}")
+            logger.debug(f"writing file {file_path} chunk: {chunk_idx}")
             chunk = chunk[1:] if _skip_header(file_index, chunk_idx) else chunk
             writer.writerows(chunk)
             rows += len(chunk)
         logger.debug(f"from {file_path}: rows {rows} written")
         return rows
 
-    def merge_one(self) -> None:
+    def merge_single(self) -> None:
         """
         Merges multiple CSV files into a single CSV file.
 
@@ -255,16 +244,16 @@ class CSVCombiner(_Combiner):
                     if (
                         csv_file is None
                     ):  # if file is closed, open new file and get writer
-                        output_path = add_no_prefix_to_file_path(
+                        output_path = add_number_prefix_to_file_path(
                             self.output_path, ms.prefix
                         )
                         csv_file, writer = self._open_new_file(output_path)
-                        ms.is_open = True
+                        ms.is_opened = True
 
                     logger.debug(
                         f"writing file {file_path} chunk: {chunk_idx} to {output_path}"
                     )
-                    chunk = self._prep_chunk(ms.is_open, chunk_idx, chunk, header)
+                    chunk = self._prep_chunk(ms.is_opened, chunk_idx, chunk, header)
 
                     writer.writerows(chunk)
                     ms.rows += len(chunk)
@@ -274,14 +263,17 @@ class CSVCombiner(_Combiner):
                         ms.prefix += 1
                         ms.rows = 0
 
-                    ms.is_open = False
+                    ms.is_opened = False
 
         except Exception as e:
             logger.error(e)
             self._cleanup(csv_file)
 
     def merge(self):
-        self.merge_many() if self.max_file_records else self.merge_one()
+        if self.max_file_records:
+            self.merge_many()
+        else:
+            self.merge_single()
 
 
 class JSONCombiner(_Combiner):

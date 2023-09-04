@@ -21,6 +21,52 @@ SUPPORTED_FILE_SUFFIXES = (
 logger = get_logger(__name__)
 
 
+def add_number_prefix_to_file_path(
+    file_path: PathLike, name_suffix: Union[AnyStr, int]
+) -> PathLike:
+    """Add a number prefix to the file path.
+
+    Parameters
+    ----------
+    file_path: The file path.
+    name_suffix: The name suffix.
+
+    Returns
+    -------
+    PathLike: The file path with the number prefix.
+
+    """
+
+    p = Path(file_path)
+    return Path(p.parent, f"{p.stem}_{name_suffix}{p.suffix}").resolve()
+
+
+def add_missing_suffix(file_path: PathLike, file_extension: str) -> PathLike:
+    """
+    Add file extension to file path.
+
+    Parameters
+    ----------
+    file_path: Union[str, Path]
+        The path to the file.
+    file_extension: str
+        The file extension to add.
+
+    Returns
+    -------
+    Union[str, Path]
+        The file path with the extension added.
+    """
+
+    if file_path.endswith(file_extension):
+        return file_path
+    return (
+        f"{file_path}{file_extension}"
+        if file_path.endswith(".")
+        else f"{file_path}.{file_extension}"
+    )
+
+
 def get_file_suffix(path: PathLike, dot: bool = True) -> str:
     """
     Get the file suffix.
@@ -243,18 +289,58 @@ def list_files(
     )
 
 
-def _file_partitionable(file_path: PathLike, column: AnyStr):
+def _file_partitionable(file_path: PathLike, column: AnyStr) -> bool:
+    """Check if the file is partitionable.
+
+    Parameters
+    ----------
+    file_path (PathLike): The file path.
+    column: The column to check.
+
+    Returns
+    -------
+    bool: Whether the file is partitionable.
+
+    """
     with open(file_path, "r") as f:
         line = f.readline()
     return _partitionable(line, column)
 
 
-def _partitionable(line: AnyStr, column: AnyStr):
-    sep = get_delimiter(line)
-    return column in line.split(sep or ",")
+def _partitionable(header_line: AnyStr, column: AnyStr) -> bool:
+    """Check if the line is partitionable by checking if column exists in headers line
+
+    Parameters
+    ----------
+    line: The line to check.
+    column: The column to check.
+
+    Returns
+    -------
+    bool: Whether the line is partitionable.
+
+    """
+    sep = get_delimiter(header_line)
+    return column in header_line.split(sep or ",")
 
 
-def validate_file_path(file_path):
+def validate_file_path(file_path: PathLike) -> PathLike:
+    """Validate the file path if it exists and has proper format.
+
+    Parameters
+    ----------
+    file_path: The file path.
+
+    Returns
+    -------
+    Path: The validated file path.
+
+    Raises
+    ------
+    TypeError: If the file path is not a string or PathLike object.
+    FileNotFoundError: If the file does not exist.
+
+    """
     if not isinstance(file_path, (str, PathLike)):
         raise TypeError("path must be a string or PathLike object")
     file_path = Path(file_path)
@@ -263,7 +349,15 @@ def validate_file_path(file_path):
     return file_path
 
 
-def mkdir_if_not_exists(file_path: PathLike):
+def mkdir_if_not_exists(file_path: PathLike) -> None:
+    """Create the directory if it does not exist.
+
+    Parameters
+    ----------
+    file_path: The file path.
+
+    """
+
     file_path = Path(file_path)
     directory = file_path.parent
     if directory.exists() is False:
@@ -271,14 +365,27 @@ def mkdir_if_not_exists(file_path: PathLike):
 
 
 @valid_file_path
-def remove_last_character(file_path: PathLike):
-    """open file and remove last character"""
+def remove_last_character(file_path: PathLike) -> None:
+    """Open file and remove the last character from it.
+
+    Parameters
+    ----------
+    file_path: The file path.
+
+    """
     with open(file_path, "rb+") as file:
         file.seek(-1, 2)
         file.truncate()
 
 
 @valid_file_path
-def write_closing_bracket(file_path: PathLike):
+def write_closing_bracket(file_path: PathLike) -> None:
+    """Write the closing bracket to the file. It's needed for combining jsons in chunk into one json file
+
+    Parameters
+    ----------
+    file_path: The file path.
+
+    """
     with open(file_path, "a") as file:
         file.write("]")

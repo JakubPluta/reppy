@@ -1,8 +1,5 @@
 import itertools
-from pathlib import Path
-from typing import Any, Iterable, Iterator, List, AnyStr, Union
-
-from reppy.data_types import PathLike
+from typing import Any, Iterable, Iterator, List
 from reppy.log import get_logger
 
 logger = get_logger(__name__)
@@ -37,36 +34,17 @@ def chunk_generator(iterable: Iterable, batch_size: int = 1000) -> Iterator[List
         yield list(itertools.chain((first_el,), chunk_it))
 
 
-def add_missing_suffix(file_path: PathLike, file_extension: str) -> PathLike:
-    """
-    Add file extension to file path.
+def _skip_header(file_index: int, chunk_idx: int) -> bool:
+    """Skip the header.
 
     Parameters
     ----------
-    file_path: Union[str, Path]
-        The path to the file.
-    file_extension: str
-        The file extension to add.
+    file_index: The file index.
+    chunk_idx: The chunk index.
 
     Returns
     -------
-    Union[str, Path]
-        The file path with the extension added.
+    bool: Whether to skip the header.
+
     """
-
-    if file_path.endswith(file_extension):
-        return file_path
-    return (
-        f"{file_path}{file_extension}"
-        if file_path.endswith(".")
-        else f"{file_path}.{file_extension}"
-    )
-
-
-def _skip_header(file_index: int, chunk_idx: int) -> bool:
     return file_index > 0 and chunk_idx == 0
-
-
-def add_no_prefix_to_file_path(file_path: PathLike, name_suffix: Union[AnyStr, int]):
-    p = Path(file_path)
-    return Path(p.parent, f"{p.stem}_{name_suffix}{p.suffix}").resolve()
